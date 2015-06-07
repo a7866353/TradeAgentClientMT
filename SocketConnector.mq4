@@ -38,7 +38,44 @@ int gConnHandle;
 
 
 //==================================
+#define D_SYMBOL_NAME_MAX (24)
 #define D_TIME_STRING_MAX (20)
+
+//+------------------------------------------------------------------+
+//| RequestType_SendOrder                                       |
+//+------------------------------------------------------------------+
+struct SendOrderRequest
+{
+	char symbolName[D_SYMBOL_NAME_MAX];
+	char cmd;
+};
+
+enum SendOrderCmd
+{
+   Nothing = 0,
+   Buy = 1,
+   Sell = 2,
+   CloseOrder = 3,
+};
+
+#import "TradeAgentClientDLL.dll"
+int GetSendOrderReq(SendOrderRequest &req);
+#import
+
+//+------------------------------------------------------------------+
+//| Script program start function                                    |
+//+------------------------------------------------------------------+
+void SendOrderRequest() export
+{
+   SendOrderRequest req;
+   GetSendOrderReq(req);
+}
+   
+   
+
+//+------------------------------------------------------------------+
+//| RequestType_RateByTime                                             |
+//+------------------------------------------------------------------+
 struct RateInfo {
 	char time[D_TIME_STRING_MAX];
 //	char dummy0[4];
@@ -50,10 +87,6 @@ struct RateInfo {
 //	char dummy1[7];
 };
 
-//+------------------------------------------------------------------+
-//| Script program start function                                    |
-//+------------------------------------------------------------------+
-#define D_SYMBOL_NAME_MAX (24)
 struct RatesByTimeRequest
 {
 	char symbolName[D_SYMBOL_NAME_MAX];
@@ -116,7 +149,7 @@ void RateDataRequest()
 
 
 //+------------------------------------------------------------------+
-//| Script program start function                                    |
+//| RequestType_SymbolNameList                                       |
 //+------------------------------------------------------------------+
 #define SYMBOL_NAME_LIST_MAX_LENGTH 100
 
@@ -139,17 +172,6 @@ void SymbolNameListRequest()
    
    SendSymbolNameListResult(symbolNameListArr, symNum);
 }
-
-
-
-#import "TradeAgentClientDLL.dll"
-//   int GetSendOrderReq(SendOrderRequest &req);
-#import
-
-
-
-
-
 
 
 //+------------------------------------------------------------------+
@@ -183,7 +205,7 @@ void OnStart()
 
       }
       // Print("Wait 1000ms");
-      Sleep(1000);
+      Sleep(1);
    }
 }
   
