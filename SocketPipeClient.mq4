@@ -18,10 +18,10 @@ enum RequestType
 	RequestType_RateByTime_Result,
 	RequestType_SymbolNameList,
 	RequestType_SymbolNameList_Result,
-    RequestType_MAX;
+	RequestType_MAX,
 };   
 
-string gRequestNameArr[RequestType_MAX]
+string gRequestNameArr[RequestType_MAX] = 
 {
     "None",
     "RequestType_Test",
@@ -30,9 +30,8 @@ string gRequestNameArr[RequestType_MAX]
     "RequestType_RateByTime",
     "RequestType_RateByTime_Result",
     "RequestType_SymbolNameList",
-    "RequestType_SymbolNameList_Result",
-    "RequestType_MAX",
-}
+    "RequestType_SymbolNameList_Result"
+};
 
 
 #import "SocketPipeClientDLL.dll"
@@ -42,19 +41,19 @@ string gRequestNameArr[RequestType_MAX]
 	int SendPacket(int handle);
     
     // For PacketReader
-    int PacketReaderFree(int handle);
-	int RequestGetLong(PacketReaderHandle handle, long *output);
+   int PacketReaderFree(int handle);
+	int RequestGetLong(int handle, long &output);
 	int RequestGetInt(int handle, int &output);
 	int RequestGetDouble(int handle, double &output);
-	int RequestGetString(int handle, char& pStr, int length);
+	int RequestGetString(int handle, char &pChar[], int length);
     
     // For PacketWriter
 	int PacketWriterCreate();
 	void PacketWriterFree(int handle);
 	int PacketWriterSetInt(int handle, int data);
-	int PacketWriterSetLong(PacketWriterHandle handle, long data);
+	int PacketWriterSetLong(int handle, long data);
 	int PacketWriterSetDouble(int handle, double data);
-	int PacketWriterSetString(int handle, char &data);
+	int PacketWriterSetString(int handle, char &pChar[]);
 
 #import
 
@@ -84,8 +83,8 @@ int PacketWriterSetString(int writeHandle, string str)
 int RequestGetDatetime(int handle, datetime &time)
 {
     string str;
-    int ret = RequestGetString(handle, str),
-    time = StringToTime(str);
+    int ret = RequestGetString(handle, str);
+    time =  StringToTime(str);
     return ret;
 }
 
@@ -94,7 +93,7 @@ int PacketWriterSetDatetime(int writeHandle, datetime time)
     // Set Time
     char timeArr[D_TIME_STRING_MAX];
     StringToCharArray(TimeToString(time), timeArr, 0);
-    return PacketWriterSetString(handle, timeArr);
+    return PacketWriterSetString(writeHandle, timeArr);
 }
 
 
@@ -122,16 +121,21 @@ struct SendOrderRequest
 void GetSendOrderReq(int readHandle, SendOrderRequest &req)
 {
     RequestGetString(readHandle, req.symbolName);
-    RequestGetInt(readHandle, req.cmd);
+    
+    int cmdValue;
+    RequestGetInt(readHandle, cmdValue);
+    req.cmd =  (SendOrderCmd)cmdValue;
+    
     RequestGetInt(readHandle, req.magicNumber);
 }
 
 int CheckOrderIndex(int magicNumber)
 {
-    int orderNum = OrderTotal();
+    int orderNum = OrdersTotal();
     for(int i=0; i<orderNum; i++)
     {
-      OrderSelect(i, SELECT_BY_POS);
+      if( OrderSelect(i, SELECT_BY_POS) == false)
+         Print("OrderSelect False!");
       if( OrderMagicNumber() == magicNumber )
         return i;
     }
@@ -153,6 +157,7 @@ void SendOrderRequest(int handle)
 {
     SendOrderRequest req;
     GetSendOrderReq(handle, req);
+    int UseSlippage = 10;
     
     if( CheckOrderIndex(req.magicNumber) >= 0 )
     {
@@ -172,22 +177,25 @@ void SendOrderRequest(int handle)
             ClosePrice = Bid;
         else
             ClosePrice = Ask;
-        OrderClose(OrderTicket(), CloseLots, ClosePrice, 
-            UseSlippage, Black);
+        if( OrderClose(OrderTicket(), CloseLots, ClosePrice, 
+            UseSlippage, Black) == false)
+         Print("OrderClose False!");
+
     }
     
     if( req.cmd == CMD_BUY )
     {
         double openPrise = Ask;
-        OrderSend(req.SymbolName, OP_BUY, LotSize, openPrise,
-            UseSlippage, 0, 0, "Buy Order", req.magicNumber, 0, Green);
+        if( OrderSend(req.symbolName, OP_BUY, LotSize, openPrise,
+            UseSlippage, 0, 0, "Buy Order", req.magicNumber, 0, Green) < 0 )
+            Print("OrderSend error!");
     }
     else if( req.cmd == CMD_SELL )
     {
         double openPrise = Bid;
-        OrderSend(req.SymbolName, OP_SELL, LotSize, openPrise,
-            UseSlippage, 0, 0, "Sell Order", req.magicNumber, 0, Red);
-
+        if( OrderSend(req.symbolName, OP_SELL, LotSize, openPrise,
+            UseSlippage, 0, 0, "Sell Order", req.magicNumber, 0, Red) < 0 )
+            Print("OrderSend error!");
     }
     
     SendOrderResult(0);
@@ -208,7 +216,9 @@ struct RatesByTimeRequest
 void GetRatesByTimeReq(int readHandle, RatesByTimeRequest &req)
 {
     RequestGetString(readHandle, req.symbolName);
-    RequestGetInt(readHandle, req.timeFrame);
+    int intValue;
+    RequestGetInt(readHandle, intValue);
+    req.timeFrame = (ENUM_TIMEFRAMES)intValue;
     RequestGetDatetime(readHandle, req.startTime);
     RequestGetDatetime(readHandle, req.stopTime);
 }
@@ -238,23 +248,26 @@ void RateDataRequest(int handle)
     datetime oneDayTime = 3600*24;
     while(true)
     {
-        copied = CopyRates(symbolName, timeFrame, startDate, 
-            stopDate, rates);
+        copied = CopyRates(req.symbolName, req.timeFrame, req.startTime, 
+            req.stopTime, rates);
         if(copied>=0)
             break;
-        stopDate += oneDayTime;
-        if(stopDate > __DATETIME__)
+        req.stopTime += oneDayTime;
+        if(req.stopTime > __DATETIME__)
             break;
     }
     int dataLength = MathMin(RATE_INFO_MAX_LENGTH, copied); 
     int writeHandle = PacketWriterCreate();
+    // Set type
+    PacketWriterSetInt(writeHandle, RequestType_RateByTime_Result);
+    PacketWriterSetInt(writeHandle, dataLength);
     for(int i=0; i<dataLength; i++)
     {
         SetRateInfo(writeHandle, rates[i]);
     }
 
-    Print("Get Request: ",symbolName, "T:",req.timeFrame,
-        "Count:",dataLength);
+    // Print("Get Request: ",req.symbolName, "T:",req.timeFrame,
+    //     "Count:",dataLength);
 
     SendPacket(writeHandle);
     PacketWriterFree(writeHandle);
@@ -302,33 +315,30 @@ void OnStart()
     InitSocket();
     while(1)
     {
-        GetPacket(readHandle);
-        ret = RequestGetInt(readHandle, type);
-        if(ret < 0)
+        ret = GetPacket(readHandle);
+        if( readHandle != 0 )
         {
-            Print("Get error!");
-            continue;
+           RequestGetInt(readHandle, type);
+           Print("Get ", gRequestNameArr[type], "!");
+           if(type == RequestType_RateByTime)
+           {
+               RateDataRequest(readHandle);
+           }
+           else if(type == RequestType_SymbolNameList)
+           {
+               SymbolNameListRequest(readHandle);
+           }
+           else if(type == RequestType_SendOrder)
+           {
+               SendOrderRequest(readHandle);
+           }
+           else if(type != 0)
+           {
+               Print("*** Get Request!", type);
+      
+           }
+           PacketReaderFree(readHandle);
         }
-        print("Get ", gRequestNameArr[type], "!");
-        
-        if(type == RequestType_RateByTime)
-        {
-            RateDataRequest(readHandle);
-        }
-        else if(type == RequestType_SymbolNameList)
-        {
-            SymbolNameListRequest(readHandle);
-        }
-        else if(type == RequestType_SendOrder)
-        {
-            SendOrderRequest(readHandle);
-        }
-        else if(type != 0)
-        {
-            Print("*** Get Request!", type);
-
-        }
-        PacketReaderFree(readHandle);
         Sleep(1);
     }
 }
