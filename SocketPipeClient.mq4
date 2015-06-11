@@ -101,13 +101,16 @@ int PacketWriterSetDatetime(int writeHandle, datetime time)
 
 
 //+------------------------------------------------------------------
-//| RequestType_SendOrder                                       //+------------------------------------------------------------------
+//| RequestType_SendOrder                                       
+//+------------------------------------------------------------------
+extern double LotSize = 0.01;
+
 enum SendOrderCmd
 {
-   Nothing = 0,
-   Buy = 1,
-   Sell = 2,
-   CloseOrder = 3,
+   CMD_NONE = 0,
+   CMD_BUY = 1,
+   CMD_SELL = 2,
+   CMD_CLOSE = 3,
 };
 struct SendOrderRequest
 {
@@ -123,13 +126,72 @@ void GetSendOrderReq(int readHandle, SendOrderRequest &req)
     RequestGetInt(readHandle, req.magicNumber);
 }
 
+int CheckOrderIndex(int magicNumber)
+{
+    int orderNum = OrderTotal();
+    for(int i=0; i<orderNum; i++)
+    {
+      OrderSelect(i, SELECT_BY_POS);
+      if( OrderMagicNumber() == magicNumber )
+        return i;
+    }
+    
+    return -1;
+}
+
+void SendOrderResult(int result)
+{
+    int writeHandle = PacketWriterCreate();
+    // Set type
+    PacketWriterSetInt(writeHandle, RequestType_SendOrder_Result);
+    PacketWriterSetInt(writeHandle, result);
+    SendPacket(writeHandle);
+    PacketWriterFree(writeHandle);
+}
+
 void SendOrderRequest(int handle)
 {
     SendOrderRequest req;
     GetSendOrderReq(handle, req);
     
+    if( CheckOrderIndex(req.magicNumber) >= 0 )
+    {
+        // Order existed
+        int type = OrderType();
+        if( (type == OP_BUY && req.cmd == CMD_BUY) ||
+            (type == OP_SELL && req.cmd == CMD_SELL) )
+        {
+            SendOrderRequest(0);
+            return ;
+        }
+        
+        // Close order
+        double CloseLots = OrderLots();
+        double ClosePrice;
+        if( type == OP_BUY )
+            ClosePrice = Bid;
+        else
+            ClosePrice = Ask;
+        OrderClose(OrderTicket(), CloseLots, ClosePrice, 
+            UseSlippage, Black);
+    }
     
+    if( req.cmd == CMD_BUY )
+    {
+        double openPrise = Ask;
+        OrderSend(req.SymbolName, OP_BUY, LotSize, openPrise,
+            UseSlippage, 0, 0, "Buy Order", req.magicNumber, 0, Green);
+    }
+    else if( req.cmd == CMD_SELL )
+    {
+        double openPrise = Bid;
+        OrderSend(req.SymbolName, OP_SELL, LotSize, openPrise,
+            UseSlippage, 0, 0, "Sell Order", req.magicNumber, 0, Red);
+
+    }
     
+    SendOrderResult(0);
+    return;
 }
 
 //+------------------------------------------------------------------
@@ -256,6 +318,10 @@ void OnStart()
         else if(type == RequestType_SymbolNameList)
         {
             SymbolNameListRequest(readHandle);
+        }
+        else if(type == RequestType_SendOrder)
+        {
+            SendOrderRequest(readHandle);
         }
         else if(type != 0)
         {
