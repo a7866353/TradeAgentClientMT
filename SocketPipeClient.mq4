@@ -18,49 +18,90 @@ enum RequestType
 	RequestType_RateByTime_Result,
 	RequestType_SymbolNameList,
 	RequestType_SymbolNameList_Result,
+    RequestType_MAX;
 };   
+
+string gRequestNameArr[RequestType_MAX]
+{
+    "None",
+    "RequestType_Test",
+    "RequestType_SendOrder",
+    "RequestType_SendOrder_Result",
+    "RequestType_RateByTime",
+    "RequestType_RateByTime_Result",
+    "RequestType_SymbolNameList",
+    "RequestType_SymbolNameList_Result",
+    "RequestType_MAX",
+}
+
+
 #import "SocketPipeClientDLL.dll"
 	int InitSocket();
  	int CloseSocket();
 	int GetPacket(int &handle);
 	int SendPacket(int handle);
-   
-   int PacketReaderFree(int handle);
-	// int RequestGetLong(PacketReaderHandle handle, ULONG64 *output);
+    
+    // For PacketReader
+    int PacketReaderFree(int handle);
+	int RequestGetLong(PacketReaderHandle handle, long *output);
 	int RequestGetInt(int handle, int &output);
 	int RequestGetDouble(int handle, double &output);
 	int RequestGetString(int handle, char& pStr, int length);
-
+    
+    // For PacketWriter
 	int PacketWriterCreate();
 	void PacketWriterFree(int handle);
 	int PacketWriterSetInt(int handle, int data);
-	// int PacketWriterSetLong(PacketWriterHandle handle, ULONG64 data);
+	int PacketWriterSetLong(PacketWriterHandle handle, long data);
 	int PacketWriterSetDouble(int handle, double data);
 	int PacketWriterSetString(int handle, char &data);
 
 #import
 
-
-#define IP_ADDRESS ("127.0.0.1")
-#define IP_PORT (9000)
-
-int gConnHandle;
-
-
-
-//==================================
+//+------------------------------------------------------------------
+//| Common                                       //+------------------------------------------------------------------
 #define D_SYMBOL_NAME_MAX (24)
 #define D_TIME_STRING_MAX (20)
+#define D_STRING_LENGTH_MAX (64)
 
-//+------------------------------------------------------------------+
-//| RequestType_SendOrder                                       |
-//+------------------------------------------------------------------+
-struct SendOrderRequest
+int RequestGetString(int handle, string &str)
 {
-	char symbolName[D_SYMBOL_NAME_MAX];
-	char cmd;
-};
+    char strArr[D_STRING_LENGTH_MAX];
+    int ret = RequestGetString(handle, strArr, D_STRING_LENGTH_MAX);
+    str = CharArrayToString(strArr, 0, D_STRING_LENGTH_MAX);
+    return ret;
+}
 
+int PacketWriterSetString(int writeHandle, string str)
+{
+    char strArr[D_STRING_LENGTH_MAX];
+    StringToCharArray(str, strArr, 0, D_STRING_LENGTH_MAX);
+    // Set SymbolName
+    return PacketWriterSetString(writeHandle, strArr); 
+}
+
+
+int RequestGetDatetime(int handle, datetime &time)
+{
+    string str;
+    int ret = RequestGetString(handle, str),
+    time = StringToTime(str);
+    return ret;
+}
+
+int PacketWriterSetDatetime(int writeHandle, datetime time)
+{
+    // Set Time
+    char timeArr[D_TIME_STRING_MAX];
+    StringToCharArray(TimeToString(time), timeArr, 0);
+    return PacketWriterSetString(handle, timeArr);
+}
+
+
+
+
+//+------------------------------------------------------------------
+//| RequestType_SendOrder                                       //+------------------------------------------------------------------
 enum SendOrderCmd
 {
    Nothing = 0,
@@ -68,116 +109,122 @@ enum SendOrderCmd
    Sell = 2,
    CloseOrder = 3,
 };
-
-//+------------------------------------------------------------------+
-//| Script program start function                                    |
-//+------------------------------------------------------------------+
-void SendOrderRequest() export
+struct SendOrderRequest
 {
-   SendOrderRequest req;
-   GetSendOrderReq(req);
-}
-   
-   
-
-//+------------------------------------------------------------------+
-//| RequestType_RateByTime                                             |
-//+------------------------------------------------------------------+
-struct RateInfo {
-	char time[D_TIME_STRING_MAX];
-//	char dummy0[4];
-	double open;
-	double high;
-	double low;
-	double close; 
-	char isEnd;
-//	char dummy1[7];
+	string symbolName;
+	SendOrderCmd cmd;
+    int magicNumber;
 };
 
+void GetSendOrderReq(int readHandle, SendOrderRequest &req)
+{
+    RequestGetString(readHandle, req.symbolName);
+    RequestGetInt(readHandle, req.cmd);
+    RequestGetInt(readHandle, req.magicNumber);
+}
+
+void SendOrderRequest(int handle)
+{
+    SendOrderRequest req;
+    GetSendOrderReq(handle, req);
+    
+    
+    
+}
+
+//+------------------------------------------------------------------
+//| RequestType_RateByTime                                       
+//+------------------------------------------------------------------
 struct RatesByTimeRequest
 {
-	char symbolName[D_SYMBOL_NAME_MAX];
-	int timeFrame;
-	char startTime[D_TIME_STRING_MAX];
-	char stopTime[D_TIME_STRING_MAX];
+	string symbolName;
+	ENUM_TIMEFRAMES timeFrame;
+	datetime startTime;
+	datetime stopTime;
 };
 
-#import "TradeAgentClientDLL.dll"
-   int SendRateByTimeIndicate(RateInfo &info[], int count, char isEnd);
-   int GetRateByTimeReq(RatesByTimeRequest &req);
-#import
+void GetRatesByTimeReq(int readHandle, RatesByTimeRequest &req)
+{
+    RequestGetString(readHandle, req.symbolName);
+    RequestGetInt(readHandle, req.timeFrame);
+    RequestGetDatetime(readHandle, req.startTime);
+    RequestGetDatetime(readHandle, req.stopTime);
+}
 
-void RateDataRequest()
+void SetRateInfo(int handle, MqlRates &info)
+{
+    PacketWriterSetDatetime(handle, info.time);
+    PacketWriterSetDouble(handle, info.open);
+    PacketWriterSetDouble(handle, info.close);
+    PacketWriterSetDouble(handle, info.high);
+    PacketWriterSetDouble(handle, info.low);
+    PacketWriterSetLong(handle, info.tick_volume);
+    PacketWriterSetLong(handle, info.real_volume);
+    PacketWriterSetInt(handle, info.spread);
+}
+
+
+void RateDataRequest(int handle)
 {
 #define RATE_INFO_MAX_LENGTH 1024
-   RateInfo rateInfoArr[RATE_INFO_MAX_LENGTH];
-   RatesByTimeRequest req;
-   GetRateByTimeReq(req);
-   
-   string symbolName = CharArrayToString(req.symbolName, 0, D_SYMBOL_NAME_MAX);
-   ENUM_TIMEFRAMES  timeFrame = req.timeFrame;
-   datetime startDate = StringToTime(CharArrayToString(req.startTime,0));         
-   datetime stopDate = StringToTime(CharArrayToString(req.stopTime,0));
-   
-   MqlRates rates[];
-   ArraySetAsSeries(rates,false);
-   int copied = -1;
-   datetime oneDayTime = 3600*24;
-   while(true)
-   {
-      copied = CopyRates(symbolName, timeFrame, startDate, stopDate, rates);
-      if(copied>=0)
-         break;
-      stopDate += oneDayTime;
-      if(stopDate > __DATETIME__)
-         break;
-      
-   }
-   int dataLength = MathMin(RATE_INFO_MAX_LENGTH, copied); 
-   for(int i=0; i<dataLength; i++)
-   {
-      MqlRates rate = rates[i];
-      rateInfoArr[i].high = rate.high;
-      rateInfoArr[i].low = rate.low;
-      rateInfoArr[i].open = rate.open;
-      rateInfoArr[i].close = rate.close;
-      StringToCharArray(TimeToString(rate.time), rateInfoArr[i].time, 0);
-      // rateInfoArr[i].time =  rate.time;
-      rateInfoArr[i].isEnd = 0;
-   }
-   
-   
-   Print("Get Request: ",symbolName, "T:",req.timeFrame,"Count:",dataLength);
-   
-   SendRateByTimeIndicate(rateInfoArr, dataLength,  True);
+    RatesByTimeRequest req;
+    GetRatesByTimeReq(handle, req);
+    
+    MqlRates rates[];
+    ArraySetAsSeries(rates,false);
+    int copied = -1;
+    datetime oneDayTime = 3600*24;
+    while(true)
+    {
+        copied = CopyRates(symbolName, timeFrame, startDate, 
+            stopDate, rates);
+        if(copied>=0)
+            break;
+        stopDate += oneDayTime;
+        if(stopDate > __DATETIME__)
+            break;
+    }
+    int dataLength = MathMin(RATE_INFO_MAX_LENGTH, copied); 
+    int writeHandle = PacketWriterCreate();
+    for(int i=0; i<dataLength; i++)
+    {
+        SetRateInfo(writeHandle, rates[i]);
+    }
+
+    Print("Get Request: ",symbolName, "T:",req.timeFrame,
+        "Count:",dataLength);
+
+    SendPacket(writeHandle);
+    PacketWriterFree(writeHandle);
 }
 
 
 
 
-//+------------------------------------------------------------------+
-//| RequestType_SymbolNameList                                       |
-//+------------------------------------------------------------------+
-#define SYMBOL_NAME_LIST_MAX_LENGTH 100
-
-#import "TradeAgentClientDLL.dll"
-   int SendSymbolNameListResult(char &symbolArr[], int count);
-#import
-
-void SymbolNameListRequest()
+//+------------------------------------------------------------------
+//| RequestType_SymbolNameList                                       
+//+------------------------------------------------------------------
+void SymbolNameListRequest(int handle)
 {
-   char symbolNameListArr[SYMBOL_NAME_LIST_MAX_LENGTH * D_SYMBOL_NAME_MAX];
+   int writeHandle = PacketWriterCreate();
+  
+   // Set type
+   PacketWriterSetInt(writeHandle, RequestType_SymbolNameList_Result);
 
    int symNum = SymbolsTotal(false);
+   // Set count
+   PacketWriterSetInt(writeHandle, symNum);
    Print("Total number of symbol: ",symNum);
+   
    for(int i=0; i<symNum; i++)
    {
       string symName = SymbolName(i, false);
-      StringToCharArray(symName, symbolNameListArr, i*D_SYMBOL_NAME_MAX, D_SYMBOL_NAME_MAX);
+      PacketWriterSetString(writeHandle, symName);
       Print(i,": ",symName);
    }
    
-   SendSymbolNameListResult(symbolNameListArr, symNum);
+   SendPacket(writeHandle);
+   PacketWriterFree(writeHandle);
 }
 
 
@@ -186,34 +233,38 @@ void SymbolNameListRequest()
 //+------------------------------------------------------------------+
 void OnStart()
 {
-//---
-   int i=0;
-   int type;
+    //---
+    int i=0;
+    int readHandle, type, ret;
 
-   InitSocket();
-   while(1)
-   {
-      GetType(type);
-      if(type < 0)
-      {
-         Print("Get error!");
-      }
-      else if(type == RequestType_RateByTime)
-      {
-         RateDataRequest();
-      }
-      else if(type == RequestType_SymbolNameList)
-      {
-         SymbolNameListRequest();
-      }
-      else if(type != 0)
-      {
-         Print("*** Get Request!", type);
+    InitSocket();
+    while(1)
+    {
+        GetPacket(readHandle);
+        ret = RequestGetInt(readHandle, type);
+        if(ret < 0)
+        {
+            Print("Get error!");
+            continue;
+        }
+        print("Get ", gRequestNameArr[type], "!");
+        
+        if(type == RequestType_RateByTime)
+        {
+            RateDataRequest(readHandle);
+        }
+        else if(type == RequestType_SymbolNameList)
+        {
+            SymbolNameListRequest(readHandle);
+        }
+        else if(type != 0)
+        {
+            Print("*** Get Request!", type);
 
-      }
-      // Print("Wait 1000ms");
-      Sleep(1);
-   }
+        }
+        PacketReaderFree(readHandle);
+        Sleep(1);
+    }
 }
   
   
