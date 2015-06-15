@@ -18,7 +18,7 @@ enum RequestType
 	RequestType_RateByTime_Result,
 	RequestType_SymbolNameList,
 	RequestType_SymbolNameList_Result,
-	RequestType_MAX,
+   RequestType_MAX,
 };   
 
 string gRequestNameArr[RequestType_MAX] = 
@@ -153,11 +153,37 @@ void SendOrderResult(int result)
     PacketWriterFree(writeHandle);
 }
 
+double PipPoint(string symbolName)
+{
+   int calcDigits = (int)MarketInfo(symbolName, MODE_DIGITS);
+   double calcPoint;
+   if( calcDigits == 2 || calcDigits == 3) calcPoint = 0.01;
+   else if( calcDigits == 4 || calcDigits == 5 ) calcPoint = 0.0001;
+   else calcPoint = 0.01;
+   return calcPoint;
+}
+
+int GetSlippage(string symbolName, int slippagePips)
+{
+   int calcDigits = (int)MarketInfo(symbolName, MODE_DIGITS);
+   double calcSlippage = slippagePips;
+   if( calcDigits == 3 || calcDigits == 5 ) calcSlippage *= 10;
+   return (int)calcSlippage;
+}
+
 void SendOrderRequest(int handle)
 {
     SendOrderRequest req;
     GetSendOrderReq(handle, req);
-    int UseSlippage = 10;
+    int UseSlippage = 5;
+    
+    UseSlippage = GetSlippage(req.symbolName, UseSlippage);
+    double ask = MarketInfo(req.symbolName, MODE_ASK);
+    double bid = MarketInfo(req.symbolName, MODE_BID);
+    double vpoint = MarketInfo(req.symbolName, MODE_POINT);
+    int vdigits = (int)MarketInfo(req.symbolName, MODE_DIGITS);
+    int vspread = (int)MarketInfo(req.symbolName, MODE_SPREAD);
+    double vOrderLots = MarketInfo(req.symbolName, MODE_LOTSIZE);
     
     if( CheckOrderIndex(req.magicNumber) >= 0 )
     {
@@ -166,17 +192,17 @@ void SendOrderRequest(int handle)
         if( (type == OP_BUY && req.cmd == CMD_BUY) ||
             (type == OP_SELL && req.cmd == CMD_SELL) )
         {
-            SendOrderRequest(0);
+            SendOrderResult(0);
             return ;
         }
         
         // Close order
-        double CloseLots = OrderLots();
+        double CloseLots = vOrderLots;
         double ClosePrice;
         if( type == OP_BUY )
-            ClosePrice = Bid;
+            ClosePrice = ask;
         else
-            ClosePrice = Ask;
+            ClosePrice = bid;
         if( OrderClose(OrderTicket(), CloseLots, ClosePrice, 
             UseSlippage, Black) == false)
          Print("OrderClose False!");
@@ -185,14 +211,14 @@ void SendOrderRequest(int handle)
     
     if( req.cmd == CMD_BUY )
     {
-        double openPrise = Ask;
+        double openPrise = ask;
         if( OrderSend(req.symbolName, OP_BUY, LotSize, openPrise,
             UseSlippage, 0, 0, "Buy Order", req.magicNumber, 0, Green) < 0 )
             Print("OrderSend error!");
     }
     else if( req.cmd == CMD_SELL )
     {
-        double openPrise = Bid;
+        double openPrise = bid;
         if( OrderSend(req.symbolName, OP_SELL, LotSize, openPrise,
             UseSlippage, 0, 0, "Sell Order", req.magicNumber, 0, Red) < 0 )
             Print("OrderSend error!");
@@ -315,6 +341,7 @@ void OnStart()
     InitSocket();
     while(1)
     {
+        RefreshRates();
         ret = GetPacket(readHandle);
         if( readHandle != 0 )
         {

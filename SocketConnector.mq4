@@ -108,7 +108,7 @@ void RateDataRequest()
    GetRateByTimeReq(req);
    
    string symbolName = CharArrayToString(req.symbolName, 0, D_SYMBOL_NAME_MAX);
-   ENUM_TIMEFRAMES  timeFrame = req.timeFrame;
+   ENUM_TIMEFRAMES  timeFrame = (ENUM_TIMEFRAMES)req.timeFrame;
    datetime startDate = StringToTime(CharArrayToString(req.startTime,0));         
    datetime stopDate = StringToTime(CharArrayToString(req.stopTime,0));
    
