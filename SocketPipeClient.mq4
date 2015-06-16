@@ -183,7 +183,6 @@ void SendOrderRequest(int handle)
     double vpoint = MarketInfo(req.symbolName, MODE_POINT);
     int vdigits = (int)MarketInfo(req.symbolName, MODE_DIGITS);
     int vspread = (int)MarketInfo(req.symbolName, MODE_SPREAD);
-    double vOrderLots = MarketInfo(req.symbolName, MODE_LOTSIZE);
     
     if( CheckOrderIndex(req.magicNumber) >= 0 )
     {
@@ -197,7 +196,7 @@ void SendOrderRequest(int handle)
         }
         
         // Close order
-        double CloseLots = vOrderLots;
+        double CloseLots = OrderLots();
         double ClosePrice;
         if( type == OP_BUY )
             ClosePrice = ask;
@@ -205,7 +204,10 @@ void SendOrderRequest(int handle)
             ClosePrice = bid;
         if( OrderClose(OrderTicket(), CloseLots, ClosePrice, 
             UseSlippage, Black) == false)
-         Print("OrderClose False!");
+         {
+            int err = GetLastError();
+            Print("OrderClose False! " + IntegerToString(err) );
+         }
 
     }
     
