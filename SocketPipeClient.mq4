@@ -171,6 +171,15 @@ int GetSlippage(string symbolName, int slippagePips)
    return (int)calcSlippage;
 }
 
+string GetTradeComment(SendOrderRequest &req, string action)
+{
+	string res = "";
+	res += IntegerToString(req.magicNumber) + ": " ;
+	res += TimeToStr(TimeCurrent(),TIME_DATE|TIME_SECONDS) ;
+	res += " " + action;
+	return res;
+}
+
 void SendOrderRequest(int handle)
 {
     SendOrderRequest req;
@@ -215,14 +224,14 @@ void SendOrderRequest(int handle)
     {
         double openPrise = ask;
         if( OrderSend(req.symbolName, OP_BUY, LotSize, openPrise,
-            UseSlippage, 0, 0, IntegerToString(req.magicNumber) + ": Buy " + req.symbolName, req.magicNumber, 0, Green) < 0 )
+            UseSlippage, 0, 0, GetTradeComment(req, "Buy"), req.magicNumber, 0, Green) < 0 )
             Print("OrderSend error!");
     }
     else if( req.cmd == CMD_SELL )
     {
         double openPrise = bid;
         if( OrderSend(req.symbolName, OP_SELL, LotSize, openPrise,
-            UseSlippage, 0, 0, IntegerToString(req.magicNumber) + ": Sell " + req.symbolName, req.magicNumber, 0, Red) < 0 )
+            UseSlippage, 0, 0, GetTradeComment(req, "Sell"), req.magicNumber, 0, Red) < 0 )
             Print("OrderSend error!");
     }
     
@@ -348,7 +357,7 @@ void OnStart()
         if( readHandle != 0 )
         {
            RequestGetInt(readHandle, type);
-           Print("Get ", gRequestNameArr[type], "!");
+           // Print("Get ", gRequestNameArr[type], "!");
            if(type == RequestType_RateByTime)
            {
                RateDataRequest(readHandle);
