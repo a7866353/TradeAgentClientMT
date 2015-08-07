@@ -18,7 +18,9 @@ enum RequestType
 	RequestType_RateByTime_Result,
 	RequestType_SymbolNameList,
 	RequestType_SymbolNameList_Result,
-   RequestType_MAX,
+	RequestType_RateByCount,
+	RequestType_RateByCount_Result,
+    RequestType_MAX,
 };   
 
 string gRequestNameArr[RequestType_MAX] = 
@@ -273,7 +275,7 @@ void SetRateInfo(int handle, MqlRates &info)
 }
 
 
-void RateDataRequest(int handle)
+void RateByTimeRequest(int handle)
 {
 #define RATE_INFO_MAX_LENGTH 1024
     RatesByTimeRequest req;
@@ -310,6 +312,54 @@ void RateDataRequest(int handle)
     PacketWriterFree(writeHandle);
 }
 
+//+------------------------------------------------------------------
+//| RequestType_RateByCount                                      
+//+------------------------------------------------------------------
+struct RatesByCountRequest
+{
+	string symbolName;
+	ENUM_TIMEFRAMES timeFrame;
+	datetime startTime;
+	int count;
+};
+
+void GetRatesByCountReq(int readHandle, RatesByCountRequest &req)
+{
+    RequestGetString(readHandle, req.symbolName);
+    int intValue;
+    RequestGetInt(readHandle, intValue);
+    req.timeFrame = (ENUM_TIMEFRAMES)intValue;
+    RequestGetDatetime(readHandle, req.startTime);
+    RequestGetInt(readHandle, req.count);
+}
+
+void RateByCountRequest(int handle)
+{
+#define RATE_INFO_MAX_LENGTH 1024
+    RatesByTimeRequest req;
+    GetRatesByTimeReq(handle, req);
+    
+    MqlRates rates[];
+    ArraySetAsSeries(rates,false);
+    int dataLength = MathMin(RATE_INFO_MAX_LENGTH, req.count); 
+    int copied = CopyRates(req.symbolName, req.timeFrame, req.startTime, 
+            dataLength, rates);
+            
+    int writeHandle = PacketWriterCreate();
+    // Set type
+    PacketWriterSetInt(writeHandle, RequestType_RateByCount_Result);
+    PacketWriterSetInt(writeHandle, copied);
+    for(int i=0; i<copied; i++)
+    {
+        SetRateInfo(writeHandle, rates[i]);
+    }
+
+    // Print("Get Request: ",req.symbolName, "T:",req.timeFrame,
+    //     "Count:",copied);
+
+    SendPacket(writeHandle);
+    PacketWriterFree(writeHandle);
+}
 
 
 
@@ -360,7 +410,11 @@ void OnStart()
            // Print("Get ", gRequestNameArr[type], "!");
            if(type == RequestType_RateByTime)
            {
-               RateDataRequest(readHandle);
+               RateByTimeRequest(readHandle);
+           }
+           else if(type == RequestType_RateByCount)
+           {
+                RateByCountRequest(readHandle);
            }
            else if(type == RequestType_SymbolNameList)
            {
