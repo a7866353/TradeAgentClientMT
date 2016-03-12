@@ -336,14 +336,14 @@ void GetRatesByCountReq(int readHandle, RatesByCountRequest &req)
 void RateByCountRequest(int handle)
 {
 #define RATE_INFO_MAX_LENGTH 1024
-    RatesByTimeRequest req;
-    GetRatesByTimeReq(handle, req);
+    RatesByCountRequest req;
+    GetRatesByCountReq(handle, req);
     
     MqlRates rates[];
     ArraySetAsSeries(rates,false);
     int dataLength = MathMin(RATE_INFO_MAX_LENGTH, req.count); 
     int copied = CopyRates(req.symbolName, req.timeFrame, req.startTime, 
-            dataLength, rates);
+            dataLength * -1, rates);
             
     int writeHandle = PacketWriterCreate();
     // Set type
