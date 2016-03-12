@@ -43,7 +43,7 @@ string gRequestNameArr[RequestType_MAX] =
 	int SendPacket(int handle);
     
     // For PacketReader
-   int PacketReaderFree(int handle);
+	int PacketReaderFree(int handle);
 	int RequestGetLong(int handle, long &output);
 	int RequestGetInt(int handle, int &output);
 	int RequestGetDouble(int handle, double &output);
@@ -60,7 +60,8 @@ string gRequestNameArr[RequestType_MAX] =
 #import
 
 //+------------------------------------------------------------------
-//| Common                                       //+------------------------------------------------------------------
+//| Common                                       
+//+------------------------------------------------------------------
 #define D_SYMBOL_NAME_MAX (24)
 #define D_TIME_STRING_MAX (20)
 #define D_STRING_LENGTH_MAX (64)
