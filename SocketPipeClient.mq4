@@ -50,7 +50,7 @@ string gRequestNameArr[RequestType_MAX] =
 	int RequestGetString(int handle, char &pChar[], int length);
     
     // For PacketWriter
-	int PacketWriterCreate();
+	int PacketWriterCreate(int size);
 	void PacketWriterFree(int handle);
 	int PacketWriterSetInt(int handle, int data);
 	int PacketWriterSetLong(int handle, long data);
@@ -65,6 +65,10 @@ string gRequestNameArr[RequestType_MAX] =
 #define D_SYMBOL_NAME_MAX (24)
 #define D_TIME_STRING_MAX (20)
 #define D_STRING_LENGTH_MAX (64)
+
+#define D_DEFAULT_BUFFER_SIZE (1024)
+#define RATE_INFO_MAX_LENGTH (1024)
+#define D_RATE_INFO_PACKET_SIZE (100)
 
 int RequestGetString(int handle, string &str)
 {
@@ -148,7 +152,7 @@ int CheckOrderIndex(int magicNumber)
 
 void SendOrderResult(int result)
 {
-    int writeHandle = PacketWriterCreate();
+    int writeHandle = PacketWriterCreate(D_DEFAULT_BUFFER_SIZE);
     // Set type
     PacketWriterSetInt(writeHandle, RequestType_SendOrder_Result);
     PacketWriterSetInt(writeHandle, result);
@@ -278,7 +282,6 @@ void SetRateInfo(int handle, MqlRates &info)
 
 void RateByTimeRequest(int handle)
 {
-#define RATE_INFO_MAX_LENGTH 1024
     RatesByTimeRequest req;
     GetRatesByTimeReq(handle, req);
     
@@ -297,7 +300,7 @@ void RateByTimeRequest(int handle)
             break;
     }
     int dataLength = MathMin(RATE_INFO_MAX_LENGTH, copied); 
-    int writeHandle = PacketWriterCreate();
+    int writeHandle = PacketWriterCreate(D_DEFAULT_BUFFER_SIZE+dataLength*D_RATE_INFO_PACKET_SIZE);
     // Set type
     PacketWriterSetInt(writeHandle, RequestType_RateByTime_Result);
     PacketWriterSetInt(writeHandle, dataLength);
@@ -336,7 +339,6 @@ void GetRatesByCountReq(int readHandle, RatesByCountRequest &req)
 
 void RateByCountRequest(int handle)
 {
-#define RATE_INFO_MAX_LENGTH 1024
     RatesByCountRequest req;
     GetRatesByCountReq(handle, req);
     
@@ -346,7 +348,7 @@ void RateByCountRequest(int handle)
     int copied = CopyRates(req.symbolName, req.timeFrame, req.startTime, 
             dataLength * -1, rates);
             
-    int writeHandle = PacketWriterCreate();
+    int writeHandle = PacketWriterCreate(D_DEFAULT_BUFFER_SIZE+copied*D_RATE_INFO_PACKET_SIZE);
     // Set type
     PacketWriterSetInt(writeHandle, RequestType_RateByCount_Result);
     PacketWriterSetInt(writeHandle, copied);
@@ -369,12 +371,10 @@ void RateByCountRequest(int handle)
 //+------------------------------------------------------------------
 void SymbolNameListRequest(int handle)
 {
-   int writeHandle = PacketWriterCreate();
-  
+   int symNum = SymbolsTotal(false);
+   int writeHandle = PacketWriterCreate(D_DEFAULT_BUFFER_SIZE+symNum*10);
    // Set type
    PacketWriterSetInt(writeHandle, RequestType_SymbolNameList_Result);
-
-   int symNum = SymbolsTotal(false);
    // Set count
    PacketWriterSetInt(writeHandle, symNum);
    Print("Total number of symbol: ",symNum);
