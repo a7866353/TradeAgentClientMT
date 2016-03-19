@@ -20,6 +20,8 @@ enum RequestType
 	RequestType_SymbolNameList_Result,
 	RequestType_RateByCount,
 	RequestType_RateByCount_Result,
+	RequestType_RateByTime2,
+	RequestType_RateByTime2_Result,
     RequestType_MAX,
 };   
 
@@ -67,7 +69,7 @@ string gRequestNameArr[RequestType_MAX] =
 #define D_STRING_LENGTH_MAX (64)
 
 #define D_DEFAULT_BUFFER_SIZE (1024)
-#define RATE_INFO_MAX_LENGTH (1024)
+#define RATE_INFO_MAX_LENGTH (1024*1024)
 #define D_RATE_INFO_PACKET_SIZE (100)
 
 int RequestGetString(int handle, string &str)
@@ -364,6 +366,48 @@ void RateByCountRequest(int handle)
     PacketWriterFree(writeHandle);
 }
 
+//+------------------------------------------------------------------
+//| RequestType_RateByTime2                                    
+//+------------------------------------------------------------------
+struct RatesByTime2Request
+{
+	string symbolName;
+	ENUM_TIMEFRAMES timeFrame;
+	datetime startTime;
+};
+void GetRatesByTime2Req(int readHandle, RatesByTime2Request &req)
+{
+    RequestGetString(readHandle, req.symbolName);
+    int intValue;
+    RequestGetInt(readHandle, intValue);
+    req.timeFrame = (ENUM_TIMEFRAMES)intValue;
+    RequestGetDatetime(readHandle, req.startTime);
+}
+void RateByTimeRequest2(int handle)
+{
+    RatesByTime2Request req;
+    GetRatesByTime2Req(handle, req);
+    
+    MqlRates rates[];
+    ArraySetAsSeries(rates,false);
+    int copied = CopyRates(req.symbolName, req.timeFrame, req.startTime, 
+            RATE_INFO_MAX_LENGTH, rates);
+            
+    int writeHandle = PacketWriterCreate(D_DEFAULT_BUFFER_SIZE+copied*D_RATE_INFO_PACKET_SIZE);
+    // Set type
+    PacketWriterSetInt(writeHandle, RequestType_RateByCount_Result);
+    PacketWriterSetInt(writeHandle, copied);
+    for(int i=0; i<copied; i++)
+    {
+        SetRateInfo(writeHandle, rates[i]);
+    }
+
+    // Print("Get Request: ",req.symbolName, "T:",req.timeFrame,
+    //     "Count:",copied);
+
+    SendPacket(writeHandle);
+    PacketWriterFree(writeHandle);
+}
 
 
 //+------------------------------------------------------------------
@@ -424,6 +468,10 @@ void OnStart()
            else if(type == RequestType_SendOrder)
            {
                SendOrderRequest(readHandle);
+           }
+           else if(type == RequestType_RateByTime2)
+           {
+               RateByTimeRequest2(readHandle);
            }
            else if(type != 0)
            {
